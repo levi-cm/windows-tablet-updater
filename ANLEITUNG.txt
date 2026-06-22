@@ -76,10 +76,13 @@ Was wird bereinigt?
 - Windows Temp-Dateien
 - Benutzer-Temp-Ordner
 - Browser-Cache von Edge, Chrome und Firefox
+- WebView2-Cache fuer Kiosk-/Webseiten-Apps
+- Windows Thumbnail-/Icon-Cache
 - Papierkorb
 - Windows Update Downloadcache
 - Delivery Optimization Cache
 - Windows Fehlerberichte und Crash-Dumps
+- alte CBS-/DISM-Protokolle
 - ersetzte Windows-Komponenten per DISM-Bereinigung
 
 Was bleibt erhalten?

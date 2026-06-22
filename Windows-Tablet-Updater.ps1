@@ -233,6 +233,33 @@ function Remove-DirectoryContentsSafe {
     }
 }
 
+function Remove-FilePatternsSafe {
+    param(
+        [Parameter(Mandatory = $true)][string[]]$Paths,
+        [Parameter(Mandatory = $true)][string]$Reason
+    )
+
+    foreach ($rawPath in $Paths) {
+        $expanded = [Environment]::ExpandEnvironmentVariables($rawPath)
+        $resolvedPaths = @(Resolve-Path -Path $expanded -ErrorAction SilentlyContinue)
+
+        foreach ($resolved in $resolvedPaths) {
+            $path = $resolved.Path
+            if (-not (Test-Path -LiteralPath $path -PathType Leaf)) {
+                continue
+            }
+
+            try {
+                Write-Log "Loesche: $path ($Reason)"
+                Remove-Item -LiteralPath $path -Force -ErrorAction Stop
+            }
+            catch {
+                Write-Log "Konnte nicht loeschen: $path -- $($_.Exception.Message)" 'WARN'
+            }
+        }
+    }
+}
+
 function Stop-UpdateServicesForCacheCleanup {
     # Dienste kurz stoppen, damit alte Update-Downloads geloescht werden koennen.
     # Falls ein Dienst sich nicht stoppen laesst, wird weitergemacht.
@@ -316,6 +343,7 @@ function Clear-BrowserCaches {
         $local = Join-Path $profile.FullName 'AppData\Local'
         $browserDataRoots = @(
             (Join-Path $local 'Microsoft\Edge\User Data'),
+            (Join-Path $local 'Microsoft\EdgeWebView\User Data'),
             (Join-Path $local 'Google\Chrome\User Data')
         )
 
@@ -360,6 +388,15 @@ function Clear-BrowserCaches {
     }
 }
 
+function Clear-WindowsShellCaches {
+    $paths = @(
+        (Join-Path $env:SystemDrive 'Users\*\AppData\Local\Microsoft\Windows\Explorer\thumbcache_*.db'),
+        (Join-Path $env:SystemDrive 'Users\*\AppData\Local\Microsoft\Windows\Explorer\iconcache_*.db')
+    )
+
+    Remove-FilePatternsSafe -Reason 'Windows Thumbnail-/Icon-Cache' -Paths $paths
+}
+
 function Clear-RecycleBinSafe {
     try {
         Write-Log 'Leere Papierkorb fuer alle Laufwerke.'
@@ -370,6 +407,15 @@ function Clear-RecycleBinSafe {
         Write-Log "Clear-RecycleBin fehlgeschlagen, nutze Fallback: $($_.Exception.Message)" 'WARN'
         Remove-DirectoryContentsSafe -Reason 'Papierkorb-Fallback' -Paths @((Join-Path $env:SystemDrive '$Recycle.Bin'))
     }
+}
+
+function Clear-OldWindowsSetupLogs {
+    $paths = @(
+        (Join-Path $env:windir 'Logs\CBS\CbsPersist_*'),
+        (Join-Path $env:windir 'Logs\DISM\*.log')
+    )
+
+    Remove-FilePatternsSafe -Reason 'alte CBS-/DISM-Protokolle' -Paths $paths
 }
 
 function Invoke-DismComponentCleanup {
@@ -427,10 +473,12 @@ function Invoke-StorageCleanup {
 
     Clear-TempAndCrashFiles
     Clear-BrowserCaches
+    Clear-WindowsShellCaches
     Clear-RecycleBinSafe
 
     if ($Level -eq 'Deep') {
         Clear-WindowsUpdateDownloadCache
+        Clear-OldWindowsSetupLogs
         Disable-HibernationForStorage
         Enable-CompactOSForStorage
         Invoke-DismComponentCleanup

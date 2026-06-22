@@ -140,8 +140,11 @@ Was wird aktualisiert?
 | Speicherbereinigung                              |
 | - Temp-Dateien                                   |
 | - Browser-Cache                                  |
+| - WebView2-Cache                                 |
+| - Windows Thumbnail-/Icon-Cache                  |
 | - Papierkorb                                     |
 | - Windows Update Downloadcache                   |
+| - alte CBS-/DISM-Protokolle                      |
 +--------------------------------------------------+
                          |
                          v
