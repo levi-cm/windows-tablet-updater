@@ -21,6 +21,9 @@ Dateien
    - PowerShell-Skript fuer Speicherbereinigung, Firefox, Windows Update und
      den automatischen Wochenlauf.
 
+3. ABLAUF-DIAGRAMM.txt
+   - Deutsches Text-Diagramm, das den Ablauf fuer Kunden erklaert.
+
 Bedienung
 ---------
 Nach dem Start zeigt das Fenster nur drei Eintraege:

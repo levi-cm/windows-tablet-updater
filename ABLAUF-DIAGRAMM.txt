@@ -1,0 +1,166 @@
+Deutsches Ablaufdiagramm - Windows-Tablet Wartungs-Updater
+==========================================================
+
+Kurzer Zweck
+------------
+Dieses Diagramm zeigt, was passiert, wenn der Kunde
+"Tablet-Updater-Starten.bat" startet.
+
+
+Gesamtuebersicht
+----------------
+
++--------------------------------------------------+
+| Kunde startet Tablet-Updater-Starten.bat          |
+| per Rechtsklick -> Als Administrator ausfuehren   |
++--------------------------------------------------+
+                         |
+                         v
++--------------------------------------------------+
+| Startmenue erscheint                             |
+|                                                  |
+| 1 - Jetzt aktualisieren                          |
+| 2 - Automatischen Dienstag-Updater starten       |
+| 3 - Beenden                                      |
++--------------------------------------------------+
+          |                         |                         |
+          |                         |                         |
+          v                         v                         v
++-------------------+   +-------------------------+   +------------------+
+| Option 1          |   | Option 2                |   | Option 3         |
+| Jetzt             |   | Dienstag-Updater        |   | Beenden          |
+| aktualisieren     |   | einrichten              |   |                  |
++-------------------+   +-------------------------+   +------------------+
+          |                         |                         |
+          v                         v                         v
++-------------------+   +-------------------------+   +------------------+
+| Wartung startet   |   | Dateien werden nach     |   | Fenster wird     |
+| sofort            |   | ProgramData kopiert     |   | geschlossen      |
++-------------------+   +-------------------------+   +------------------+
+          |                         |
+          v                         v
++-------------------+   +-------------------------+
+| Speicher wird     |   | Autostart-Datei wird    |
+| bereinigt         |   | im Benutzerprofil       |
+|                   |   | erstellt                |
++-------------------+   +-------------------------+
+          |                         |
+          v                         v
++-------------------+   +-------------------------+
+| Firefox wird      |   | Windows-Aufgabe wird    |
+| installiert oder  |   | eingerichtet            |
+| aktualisiert      |   |                         |
++-------------------+   +-------------------------+
+          |                         |
+          v                         v
++-------------------+   +-------------------------+
+| Windows Updates   |   | Hinweisfenster bleibt   |
+| werden gesucht    |   | offen                   |
+| und installiert   |   |                         |
++-------------------+   +-------------------------+
+          |                         |
+          v                         v
++-------------------+   +-------------------------+
+| Neustart noetig?  |   | Meldung im Fenster:     |
+|                   |   | "Bitte dieses Fenster   |
+|                   |   | nicht schliessen."      |
++-------------------+   +-------------------------+
+          |                         |
+      +---+---+                     v
+      |       |          +-------------------------+
+      v       v          | Das Fenster prueft alle |
++---------+ +---------+  | 5 Minuten, ob die       |
+| Nein    | | Ja      |  | Aufgabe vorhanden ist   |
++---------+ +---------+  +-------------------------+
+      |       |
+      v       v
++---------+ +--------------------------------------+
+| Fertig  | | Resume-Aufgabe wird erstellt         |
+|         | | und Windows startet neu              |
++---------+ +--------------------------------------+
+                |
+                v
+      +--------------------------------------------+
+      | Nach dem Neustart laeuft die Wartung       |
+      | automatisch weiter, bis keine Updates      |
+      | mehr offen sind                            |
+      +--------------------------------------------+
+
+
+Was Option 2 genau einrichtet
+-----------------------------
+
++--------------------------------------------------+
+| Option 2: Automatischen Dienstag-Updater starten  |
++--------------------------------------------------+
+                         |
+                         v
++--------------------------------------------------+
+| Kopie nach:                                      |
+| C:\ProgramData\SurfaceTabletUpdater\             |
++--------------------------------------------------+
+                         |
+                         v
++--------------------------------------------------+
+| Autostart-Eintrag fuer das sichtbare Fenster:    |
+| %APPDATA%\Microsoft\Windows\Start Menu\Programs\ |
+| Startup\Tablet-Updater-Autostart.bat             |
++--------------------------------------------------+
+                         |
+                         v
++--------------------------------------------------+
+| Windows-Aufgabe fuer die eigentlichen Updates:   |
+| \SurfaceTabletUpdater\WeeklyAutoUpdater          |
+|                                                  |
+| Zeit: jeden Dienstag um 03:30 Uhr                |
+| Rechte: SYSTEM / hoechste Rechte                 |
++--------------------------------------------------+
+                         |
+                         v
++--------------------------------------------------+
+| Sichtbares Fenster bleibt offen und erklaert:    |
+| Bitte dieses Fenster nicht schliessen.           |
+| Der Wartungs-Updater wartet auf Dienstag.        |
++--------------------------------------------------+
+
+
+Wichtige Trennung
+-----------------
+
+Das sichtbare Fenster ist nur der Hinweis fuer Menschen am Tablet.
+Die eigentliche Update-Installation laeuft ueber die Windows-Aufgabe
+mit Systemrechten. Dadurch kann Windows Updates installieren, ohne dass
+ein normaler Benutzer alles manuell bestaetigen muss.
+
+
+Was wird aktualisiert?
+----------------------
+
++--------------------------------------------------+
+| Speicherbereinigung                              |
+| - Temp-Dateien                                   |
+| - Browser-Cache                                  |
+| - Papierkorb                                     |
+| - Windows Update Downloadcache                   |
++--------------------------------------------------+
+                         |
+                         v
++--------------------------------------------------+
+| Firefox                                          |
+| - nur Mozilla Firefox                            |
+| - kein "winget upgrade --all"                    |
++--------------------------------------------------+
+                         |
+                         v
++--------------------------------------------------+
+| Windows Update                                   |
+| - normale automatische Updates                   |
+| - automatisch angebotene Treiber/Firmware        |
+| - keine optionalen Preview-/Extra-Updates        |
++--------------------------------------------------+
+
+
+Wo liegen Protokolle?
+---------------------
+
+C:\ProgramData\SurfaceTabletUpdater\Logs
