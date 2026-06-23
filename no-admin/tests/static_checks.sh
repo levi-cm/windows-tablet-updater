@@ -1,0 +1,69 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+NO_ADMIN_DIR="$ROOT_DIR/no-admin"
+PS1_FILE="$NO_ADMIN_DIR/Windows-Tablet-Updater-NoAdmin.ps1"
+BAT_FILE="$NO_ADMIN_DIR/Tablet-Updater-Starten-NoAdmin.bat"
+README_FILE="$NO_ADMIN_DIR/readme.md"
+FLOW_FILE="$NO_ADMIN_DIR/ABLAUF-DIAGRAMM.txt"
+
+fail() {
+  printf 'FAIL: %s\n' "$1" >&2
+  exit 1
+}
+
+assert_file() {
+  [[ -f "$1" ]] || fail "missing file: ${1#$ROOT_DIR/}"
+}
+
+assert_contains() {
+  local file="$1"
+  local pattern="$2"
+  grep -Fq -- "$pattern" "$file" || fail "${file#$ROOT_DIR/} does not contain: $pattern"
+}
+
+assert_not_contains() {
+  local file="$1"
+  local pattern="$2"
+  if grep -Fq -- "$pattern" "$file"; then
+    fail "${file#$ROOT_DIR/} must not contain: $pattern"
+  fi
+}
+
+assert_file "$PS1_FILE"
+assert_file "$BAT_FILE"
+assert_file "$README_FILE"
+assert_file "$FLOW_FILE"
+
+assert_contains "$PS1_FILE" '$env:LOCALAPPDATA'
+assert_contains "$PS1_FILE" 'Get-PrivilegeState'
+assert_contains "$PS1_FILE" 'Invoke-WindowsUpdateCheckOnly'
+assert_contains "$PS1_FILE" 'Install-UserAutoUpdater'
+assert_contains "$PS1_FILE" 'ms-settings:windowsupdate'
+assert_contains "$PS1_FILE" '--scope'
+assert_contains "$PS1_FILE" 'user'
+assert_contains "$PS1_FILE" 'SKIP'
+assert_not_contains "$PS1_FILE" 'Assert-AdminOrSystem'
+assert_not_contains "$PS1_FILE" 'Register-ScheduledTask'
+assert_not_contains "$PS1_FILE" "New-ScheduledTaskPrincipal -UserId 'SYSTEM'"
+assert_not_contains "$PS1_FILE" '--scope machine'
+assert_not_contains "$PS1_FILE" 'Stop-Service'
+assert_not_contains "$PS1_FILE" 'Add-AppxProvisionedPackage'
+assert_not_contains "$PS1_FILE" 'Repair-WinGetPackageManager -AllUsers'
+assert_not_contains "$PS1_FILE" 'Install-Module -Name Microsoft.WinGet.Client'
+assert_not_contains "$PS1_FILE" 'powercfg /hibernate off'
+assert_not_contains "$PS1_FILE" 'CompactOS:always'
+assert_not_contains "$PS1_FILE" 'shutdown.exe /r /f'
+
+assert_contains "$BAT_FILE" 'No-Admin'
+assert_contains "$BAT_FILE" 'Windows-Tablet-Updater-NoAdmin.ps1'
+assert_not_contains "$BAT_FILE" 'net session'
+assert_not_contains "$BAT_FILE" 'Als Administrator'
+
+assert_contains "$README_FILE" 'ohne Administratorrechte'
+assert_contains "$README_FILE" 'Was ohne Admin nicht moeglich ist'
+assert_contains "$FLOW_FILE" 'No-Admin'
+assert_contains "$FLOW_FILE" 'Windows Update Einstellungen'
+
+printf 'PASS: no-admin static checks\n'

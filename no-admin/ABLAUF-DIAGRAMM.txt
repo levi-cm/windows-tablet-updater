@@ -1,0 +1,115 @@
+Deutsches Ablaufdiagramm - Windows-Tablet Wartungs-Updater No-Admin
+===================================================================
+
+Kurzer Zweck
+------------
+Dieses Diagramm zeigt, was passiert, wenn der Kunde
+"Tablet-Updater-Starten-NoAdmin.bat" startet.
+
+
+Gesamtuebersicht
+----------------
+
++--------------------------------------------------+
+| Kunde startet Tablet-Updater-Starten-NoAdmin.bat |
+| normal, ohne Adminrechte                         |
++--------------------------------------------------+
+                         |
+                         v
++--------------------------------------------------+
+| Startmenue erscheint                             |
+|                                                  |
+| 1 - Jetzt No-Admin-Wartung ausfuehren           |
+| 2 - No-Admin Wochenlauf einrichten              |
+| 3 - Windows Update Einstellungen oeffnen        |
+| 4 - Beenden                                      |
++--------------------------------------------------+
+          |                         |                         |
+          |                         |                         |
+          v                         v                         v
++-------------------+   +-------------------------+   +------------------+
+| Option 1          |   | Option 2                |   | Option 3         |
+| Jetzt             |   | Wochenlauf fuer         |   | Windows Update   |
+| ausfuehren        |   | Benutzer einrichten     |   | Einstellungen    |
++-------------------+   +-------------------------+   +------------------+
+          |                         |                         |
+          v                         v                         v
++-------------------+   +-------------------------+   +------------------+
+| Benutzer-Temp     |   | Skript wird nach        |   | Einstellungen    |
+| wird bereinigt    |   | LOCALAPPDATA kopiert    |   | werden geoeffnet |
++-------------------+   +-------------------------+   +------------------+
+          |                         |
+          v                         v
++-------------------+   +-------------------------+
+| Browser-Caches    |   | Benutzer-Aufgabe wird   |
+| werden bereinigt  |   | per schtasks versucht   |
++-------------------+   +-------------------------+
+          |                         |
+          v                         v
++-------------------+   +-------------------------+
+| Firefox wird per  |   | Autostart-Statusfenster |
+| WinGet gepflegt   |   | wird im Profil erstellt |
++-------------------+   +-------------------------+
+          |
+          v
++-------------------+
+| Windows Updates   |
+| werden gesucht    |
+| und angezeigt     |
++-------------------+
+          |
+          v
++----------------------------------------------+
+| Windows Update Einstellungen werden geoeffnet |
+| Installation erfolgt manuell durch Benutzer   |
++----------------------------------------------+
+
+
+Was wird im No-Admin-Lauf gemacht?
+----------------------------------
+
++--------------------------------------------------+
+| Speicherbereinigung                              |
+| - Benutzer-Temp                                  |
+| - Browser-Cache                                  |
+| - WebView2-Cache                                 |
+| - Windows Thumbnail-/Icon-Cache des Benutzers    |
+| - Papierkorb des aktuellen Benutzers             |
++--------------------------------------------------+
+                         |
+                         v
++--------------------------------------------------+
+| Firefox                                          |
+| - nur Mozilla Firefox                            |
+| - bevorzugt Benutzerkontext / --scope user       |
+| - kein "winget upgrade --all"                    |
++--------------------------------------------------+
+                         |
+                         v
++--------------------------------------------------+
+| Windows Update                                   |
+| - regulaere automatische Updates werden gesucht  |
+| - Installation ohne Admin wird nicht erzwungen   |
+| - Windows Update Einstellungen werden geoeffnet  |
++--------------------------------------------------+
+
+
+Was wird nur protokolliert und uebersprungen?
+---------------------------------------------
+
++--------------------------------------------------+
+| SKIP: Admin noetig                              |
+| - Windows Updates automatisch installieren      |
+| - Windows Update Downloadcache systemweit       |
+| - Dienste stoppen/starten                       |
+| - DISM Komponentenbereinigung                   |
+| - Ruhezustand / hiberfil.sys                    |
+| - CompactOS                                     |
+| - SYSTEM-Aufgaben                               |
++--------------------------------------------------+
+
+
+Wo liegen Protokolle?
+---------------------
+
+%LOCALAPPDATA%\SurfaceTabletUpdater-NoAdmin\Logs
