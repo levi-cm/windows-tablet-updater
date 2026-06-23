@@ -2,7 +2,12 @@
 set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
-NO_ADMIN_DIR="$ROOT_DIR/no-admin"
+ADMIN_DIR="$ROOT_DIR/mit-admin"
+NO_ADMIN_DIR="$ROOT_DIR/ohne-admin"
+ADMIN_PS1_FILE="$ADMIN_DIR/Windows-Tablet-Updater.ps1"
+ADMIN_BAT_FILE="$ADMIN_DIR/Tablet-Updater-Starten.bat"
+ADMIN_README_FILE="$ADMIN_DIR/readme.md"
+ADMIN_FLOW_FILE="$ADMIN_DIR/ABLAUF-DIAGRAMM.txt"
 PS1_FILE="$NO_ADMIN_DIR/Windows-Tablet-Updater-NoAdmin.ps1"
 BAT_FILE="$NO_ADMIN_DIR/Tablet-Updater-Starten-NoAdmin.bat"
 README_FILE="$NO_ADMIN_DIR/readme.md"
@@ -15,6 +20,14 @@ fail() {
 
 assert_file() {
   [[ -f "$1" ]] || fail "missing file: ${1#$ROOT_DIR/}"
+}
+
+assert_dir() {
+  [[ -d "$1" ]] || fail "missing directory: ${1#$ROOT_DIR/}"
+}
+
+assert_missing() {
+  [[ ! -e "$1" ]] || fail "unexpected root clutter remains: ${1#$ROOT_DIR/}"
 }
 
 assert_contains() {
@@ -31,10 +44,23 @@ assert_not_contains() {
   fi
 }
 
+assert_dir "$ADMIN_DIR"
+assert_dir "$NO_ADMIN_DIR"
+
+assert_file "$ADMIN_PS1_FILE"
+assert_file "$ADMIN_BAT_FILE"
+assert_file "$ADMIN_README_FILE"
+assert_file "$ADMIN_FLOW_FILE"
 assert_file "$PS1_FILE"
 assert_file "$BAT_FILE"
 assert_file "$README_FILE"
 assert_file "$FLOW_FILE"
+
+assert_missing "$ROOT_DIR/Windows-Tablet-Updater.ps1"
+assert_missing "$ROOT_DIR/Tablet-Updater-Starten.bat"
+assert_missing "$ROOT_DIR/readme.md"
+assert_missing "$ROOT_DIR/ABLAUF-DIAGRAMM.txt"
+assert_missing "$ROOT_DIR/no-admin"
 
 assert_contains "$PS1_FILE" '$env:LOCALAPPDATA'
 assert_contains "$PS1_FILE" 'Get-PrivilegeState'
@@ -66,4 +92,4 @@ assert_contains "$README_FILE" 'Was ohne Admin nicht moeglich ist'
 assert_contains "$FLOW_FILE" 'No-Admin'
 assert_contains "$FLOW_FILE" 'Windows Update Einstellungen'
 
-printf 'PASS: no-admin static checks\n'
+printf 'PASS: admin/no-admin structure checks\n'
