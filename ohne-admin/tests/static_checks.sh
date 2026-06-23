@@ -4,6 +4,7 @@ set -euo pipefail
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 ADMIN_DIR="$ROOT_DIR/mit-admin"
 NO_ADMIN_DIR="$ROOT_DIR/ohne-admin"
+ROOT_README_FILE="$ROOT_DIR/README.md"
 ADMIN_PS1_FILE="$ADMIN_DIR/Windows-Tablet-Updater.ps1"
 ADMIN_BAT_FILE="$ADMIN_DIR/Tablet-Updater-Starten.bat"
 ADMIN_README_FILE="$ADMIN_DIR/readme.md"
@@ -47,6 +48,7 @@ assert_not_contains() {
 assert_dir "$ADMIN_DIR"
 assert_dir "$NO_ADMIN_DIR"
 
+assert_file "$ROOT_README_FILE"
 assert_file "$ADMIN_PS1_FILE"
 assert_file "$ADMIN_BAT_FILE"
 assert_file "$ADMIN_README_FILE"
@@ -91,5 +93,10 @@ assert_contains "$README_FILE" 'ohne Administratorrechte'
 assert_contains "$README_FILE" 'Was ohne Admin nicht moeglich ist'
 assert_contains "$FLOW_FILE" 'No-Admin'
 assert_contains "$FLOW_FILE" 'Windows Update Einstellungen'
+assert_contains "$ROOT_README_FILE" 'mit-admin/'
+assert_contains "$ROOT_README_FILE" 'ohne-admin/'
+assert_contains "$ROOT_README_FILE" 'Welche Variante soll ich nutzen?'
+assert_contains "$ROOT_README_FILE" 'Tablet-Updater-Starten.bat'
+assert_contains "$ROOT_README_FILE" 'Tablet-Updater-Starten-NoAdmin.bat'
 
 printf 'PASS: admin/no-admin structure checks\n'
