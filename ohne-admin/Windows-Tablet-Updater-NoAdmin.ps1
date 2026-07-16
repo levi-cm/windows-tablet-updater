@@ -32,8 +32,10 @@ param(
     [ValidateSet('Disabled', 'UpgradeOnly', 'InstallIfMissing')]
     [string]$FirefoxUpdateMode = 'InstallIfMissing',
 
+    [ValidateSet('Mozilla.Firefox', 'Mozilla.Firefox.ESR')]
     [string]$FirefoxPackageId = 'Mozilla.Firefox',
 
+    [ValidatePattern('^[A-Za-z]{2,3}(?:-[A-Za-z0-9]{2,8})*$')]
     [string]$FirefoxLocale = 'de-DE',
 
     [bool]$OpenWindowsUpdateSettings = $true,
@@ -43,7 +45,11 @@ param(
 
     [string]$AutoTime = '03:30',
 
-    [bool]$IncludeAutomaticDrivers = $true
+    [bool]$IncludeAutomaticDrivers = $true,
+
+    # Zeigt Preflight und geplante Aktionen, aendert aber keine Dateien,
+    # Pakete, Aufgaben oder Windows-Einstellungen.
+    [switch]$DryRun
 )
 
 Set-StrictMode -Version 2.0
@@ -57,10 +63,48 @@ $RunnerBat      = Join-Path $AppRoot 'Run-NoAdmin-Weekly.bat'
 $TaskName       = 'SurfaceTabletUpdaterNoAdminWeeklyUserUpdater'
 $MutexName      = 'Local\SurfaceTabletUpdaterNoAdminMutex'
 
-New-Item -Path $AppRoot -ItemType Directory -Force | Out-Null
-New-Item -Path $LogDir -ItemType Directory -Force | Out-Null
-
 $LogFile = Join-Path $LogDir ('{0}_{1}.log' -f $Mode, (Get-Date -Format 'yyyyMMdd_HHmmss'))
+
+$DirectoryDeletionAllowlist = @(
+    $env:TEMP,
+    $env:TMP,
+    (Join-Path $env:LOCALAPPDATA 'Temp'),
+    (Join-Path $env:LOCALAPPDATA 'Microsoft\Windows\WER\ReportArchive'),
+    (Join-Path $env:LOCALAPPDATA 'Microsoft\Windows\WER\ReportQueue'),
+    (Join-Path $env:LOCALAPPDATA 'CrashDumps'),
+    (Join-Path $env:LOCALAPPDATA 'Microsoft\Edge\User Data\*\Cache'),
+    (Join-Path $env:LOCALAPPDATA 'Microsoft\Edge\User Data\*\Code Cache'),
+    (Join-Path $env:LOCALAPPDATA 'Microsoft\Edge\User Data\*\GPUCache'),
+    (Join-Path $env:LOCALAPPDATA 'Microsoft\Edge\User Data\*\Media Cache'),
+    (Join-Path $env:LOCALAPPDATA 'Microsoft\Edge\User Data\*\ShaderCache'),
+    (Join-Path $env:LOCALAPPDATA 'Microsoft\Edge\User Data\*\GrShaderCache'),
+    (Join-Path $env:LOCALAPPDATA 'Microsoft\Edge\User Data\*\Service Worker\CacheStorage'),
+    (Join-Path $env:LOCALAPPDATA 'Microsoft\EdgeWebView\User Data\*\Cache'),
+    (Join-Path $env:LOCALAPPDATA 'Microsoft\EdgeWebView\User Data\*\Code Cache'),
+    (Join-Path $env:LOCALAPPDATA 'Microsoft\EdgeWebView\User Data\*\GPUCache'),
+    (Join-Path $env:LOCALAPPDATA 'Microsoft\EdgeWebView\User Data\*\Media Cache'),
+    (Join-Path $env:LOCALAPPDATA 'Microsoft\EdgeWebView\User Data\*\ShaderCache'),
+    (Join-Path $env:LOCALAPPDATA 'Microsoft\EdgeWebView\User Data\*\GrShaderCache'),
+    (Join-Path $env:LOCALAPPDATA 'Microsoft\EdgeWebView\User Data\*\Service Worker\CacheStorage'),
+    (Join-Path $env:LOCALAPPDATA 'Google\Chrome\User Data\*\Cache'),
+    (Join-Path $env:LOCALAPPDATA 'Google\Chrome\User Data\*\Code Cache'),
+    (Join-Path $env:LOCALAPPDATA 'Google\Chrome\User Data\*\GPUCache'),
+    (Join-Path $env:LOCALAPPDATA 'Google\Chrome\User Data\*\Media Cache'),
+    (Join-Path $env:LOCALAPPDATA 'Google\Chrome\User Data\*\ShaderCache'),
+    (Join-Path $env:LOCALAPPDATA 'Google\Chrome\User Data\*\GrShaderCache'),
+    (Join-Path $env:LOCALAPPDATA 'Google\Chrome\User Data\*\Service Worker\CacheStorage'),
+    (Join-Path $env:LOCALAPPDATA 'Mozilla\Firefox\Profiles\*\cache2'),
+    (Join-Path $env:LOCALAPPDATA 'Mozilla\Firefox\Profiles\*\startupCache'),
+    (Join-Path $env:LOCALAPPDATA 'Mozilla\Firefox\Profiles\*\shader-cache'),
+    (Join-Path $env:LOCALAPPDATA 'Mozilla\Firefox\Profiles\*\thumbnails'),
+    (Join-Path $env:SystemDrive '$Recycle.Bin\*'),
+    '?:\$Recycle.Bin\*'
+)
+
+$FileDeletionAllowlist = @(
+    (Join-Path $env:LOCALAPPDATA 'Microsoft\Windows\Explorer\thumbcache_*.db'),
+    (Join-Path $env:LOCALAPPDATA 'Microsoft\Windows\Explorer\iconcache_*.db')
+)
 
 function Write-Log {
     param(
@@ -70,6 +114,70 @@ function Write-Log {
 
     $line = '[{0}] [{1}] {2}' -f (Get-Date -Format 'yyyy-MM-dd HH:mm:ss'), $Level, $Message
     Write-Host $line
+}
+
+function Test-DeletionTargetAllowed {
+    param(
+        [Parameter(Mandatory = $true)][string]$Path,
+        [Parameter(Mandatory = $true)][string[]]$AllowedPatterns
+    )
+
+    if ([string]::IsNullOrWhiteSpace($Path)) { return $false }
+    $runningOnWindows = [Environment]::OSVersion.Platform -eq [PlatformID]::Win32NT
+    if (-not $runningOnWindows -and $Path -match '^[A-Za-z]:[\\/]') {
+        $candidate = $Path.Replace('/', '\').TrimEnd('\')
+        if ($candidate -match '^[A-Za-z]:$') { return $false }
+    }
+    else {
+        $candidate = [IO.Path]::GetFullPath($Path).TrimEnd('\', '/')
+        $root = [IO.Path]::GetPathRoot($candidate).TrimEnd('\', '/')
+        if ($candidate -eq $root) { return $false }
+    }
+
+    foreach ($pattern in $AllowedPatterns) {
+        if ([string]::IsNullOrWhiteSpace($pattern)) { continue }
+        $normalizedPattern = $pattern.Replace('/', '\').TrimEnd('\')
+        if ($candidate -notmatch '^[A-Za-z]:[\\/]' -and -not $runningOnWindows) {
+            $normalizedPattern = $pattern.TrimEnd('\', '/')
+        }
+        if ($candidate -like $normalizedPattern) { return $true }
+    }
+
+    return $false
+}
+
+function Assert-DeletionTargetAllowed {
+    param(
+        [Parameter(Mandatory = $true)][string]$Path,
+        [Parameter(Mandatory = $true)][string[]]$AllowedPatterns
+    )
+
+    if (-not (Test-DeletionTargetAllowed -Path $Path -AllowedPatterns $AllowedPatterns)) {
+        throw "Pfad ist nicht in der Loesch-Allowlist: $Path"
+    }
+}
+
+function Test-TrustedMicrosoftFile {
+    param([Parameter(Mandatory = $true)][string]$Path)
+
+    $signature = Get-AuthenticodeSignature -FilePath $Path -ErrorAction Stop
+    $subject = if ($signature.SignerCertificate) { $signature.SignerCertificate.Subject } else { '' }
+    if ($signature.Status.ToString() -ne 'Valid' -or $subject -notmatch '(^|,\s*)O=Microsoft Corporation(,|$)') {
+        throw "Signaturpruefung fehlgeschlagen: $Path (Status=$($signature.Status); Subject=$subject)"
+    }
+
+    return $true
+}
+
+function Write-PreflightSummary {
+    $privilege = Get-PrivilegeState
+    Write-Log '=== Preflight ==='
+    Write-Log "Modus=$Mode; Benutzer=$($privilege.UserName); Scope=$($privilege.Scope); DryRun=$([bool]$DryRun)"
+    Write-Log "Bereinigung=$CleanupLevel; Firefox=$FirefoxUpdateMode ($FirefoxPackageId); Treiberanzeige=$IncludeAutomaticDrivers"
+    Write-Log "WindowsUpdateEinstellungen=$OpenWindowsUpdateSettings; Zeitplan=$AutoDay $AutoTime; TaskRechte=LIMITED"
+    if ($DryRun) {
+        Write-Log 'DRY-RUN: keine Dateien, Pakete, Aufgaben oder Windows-Einstellungen werden geaendert.' 'WARN'
+    }
 }
 
 function Get-PrivilegeState {
@@ -130,6 +238,10 @@ function Copy-SelfToLocalAppData {
     $dest = [IO.Path]::GetFullPath($InstalledPs1)
 
     if ($source -ne $dest) {
+        if ($DryRun) {
+            Write-Log "DRY-RUN: wuerde PowerShell-Skript nach $dest kopieren."
+            return $source
+        }
         Copy-Item -LiteralPath $source -Destination $dest -Force
         Write-Log "PowerShell-Skript nach $dest kopiert."
     }
@@ -150,7 +262,8 @@ function Remove-DirectoryContentsSafe {
         $resolvedPaths = @(Resolve-Path -Path $expanded -ErrorAction SilentlyContinue)
 
         foreach ($resolved in $resolvedPaths) {
-            $path = $resolved.Path
+            $path = if ($resolved.PSObject.Properties['ProviderPath']) { $resolved.ProviderPath } else { $resolved.Path }
+            Assert-DeletionTargetAllowed -Path $path -AllowedPatterns $DirectoryDeletionAllowlist
             if (-not (Test-Path -LiteralPath $path)) { continue }
 
             Write-Log "Bereinige: $path ($Reason)"
@@ -158,7 +271,16 @@ function Remove-DirectoryContentsSafe {
 
             foreach ($item in $items) {
                 try {
-                    Remove-Item -LiteralPath $item.FullName -Recurse -Force -ErrorAction Stop
+                    if ($DryRun) {
+                        Write-Log "DRY-RUN: wuerde loeschen: $($item.FullName)"
+                        continue
+                    }
+                    if (($item.Attributes -band [IO.FileAttributes]::ReparsePoint) -ne 0) {
+                        Remove-Item -LiteralPath $item.FullName -Force -ErrorAction Stop
+                    }
+                    else {
+                        Remove-Item -LiteralPath $item.FullName -Recurse -Force -ErrorAction Stop
+                    }
                 }
                 catch {
                     Write-Log "Konnte nicht loeschen: $($item.FullName) -- $($_.Exception.Message)" 'WARN'
@@ -181,11 +303,16 @@ function Remove-FilePatternsSafe {
         $resolvedPaths = @(Resolve-Path -Path $expanded -ErrorAction SilentlyContinue)
 
         foreach ($resolved in $resolvedPaths) {
-            $path = $resolved.Path
+            $path = if ($resolved.PSObject.Properties['ProviderPath']) { $resolved.ProviderPath } else { $resolved.Path }
+            Assert-DeletionTargetAllowed -Path $path -AllowedPatterns $FileDeletionAllowlist
             if (-not (Test-Path -LiteralPath $path -PathType Leaf)) { continue }
 
             try {
                 Write-Log "Loesche: $path ($Reason)"
+                if ($DryRun) {
+                    Write-Log "DRY-RUN: wuerde Datei loeschen: $path"
+                    continue
+                }
                 Remove-Item -LiteralPath $path -Force -ErrorAction Stop
             }
             catch {
@@ -264,21 +391,19 @@ function Clear-CurrentUserShellCaches {
 
 function Clear-CurrentUserRecycleBin {
     try {
-        Write-Log 'Leere Papierkorb fuer den aktuellen Benutzer.'
-        Clear-RecycleBin -Force -ErrorAction Stop
-        return
-    }
-    catch {
-        Write-Log "Clear-RecycleBin fehlgeschlagen, versuche Benutzer-Fallback: $($_.Exception.Message)" 'WARN'
-    }
-
-    try {
         $sid = [Security.Principal.WindowsIdentity]::GetCurrent().User.Value
-        $userRecycleBin = Join-Path (Join-Path $env:SystemDrive '$Recycle.Bin') $sid
-        Remove-DirectoryContentsSafe -Reason 'Papierkorb-Fallback aktueller Benutzer' -Paths @($userRecycleBin)
+        $targets = @(Get-PSDrive -PSProvider FileSystem -ErrorAction SilentlyContinue |
+            Where-Object { $_.Root -match '^[A-Za-z]:\\$' } |
+            ForEach-Object { Join-Path (Join-Path $_.Root '$Recycle.Bin') $sid })
+        if ($targets.Count -eq 0) {
+            $targets = @((Join-Path (Join-Path $env:SystemDrive '$Recycle.Bin') $sid))
+        }
+
+        Write-Log 'Leere allowlist-validierte Papierkorbpfade fuer aktuellen Benutzer.'
+        Remove-DirectoryContentsSafe -Reason 'Papierkorb aktueller Benutzer' -Paths $targets
     }
     catch {
-        Write-Log "Papierkorb-Fallback fehlgeschlagen: $($_.Exception.Message)" 'WARN'
+        Write-Log "Papierkorb-Bereinigung fehlgeschlagen: $($_.Exception.Message)" 'WARN'
     }
 }
 
@@ -308,7 +433,13 @@ function Invoke-StorageCleanup {
 function Get-WingetPath {
     $cmd = Get-Command 'winget.exe' -ErrorAction SilentlyContinue
     if ($cmd -and $cmd.Source) {
-        return $cmd.Source
+        try {
+            Test-TrustedMicrosoftFile -Path $cmd.Source | Out-Null
+            return $cmd.Source
+        }
+        catch {
+            Write-Log "WinGet-Kandidat abgelehnt: $($_.Exception.Message)" 'WARN'
+        }
     }
 
     try {
@@ -319,7 +450,13 @@ function Get-WingetPath {
         if ($pkg -and $pkg.InstallLocation) {
             $candidate = Join-Path $pkg.InstallLocation 'winget.exe'
             if (Test-Path -LiteralPath $candidate) {
-                return $candidate
+                try {
+                    Test-TrustedMicrosoftFile -Path $candidate | Out-Null
+                    return $candidate
+                }
+                catch {
+                    Write-Log "WinGet-Kandidat abgelehnt: $($_.Exception.Message)" 'WARN'
+                }
             }
         }
     }
@@ -339,6 +476,11 @@ function Invoke-WingetCommand {
 
     $display = 'winget ' + ($Arguments -join ' ')
     Write-Log "Fuehre aus: $display"
+
+    if ($DryRun -and $Arguments.Count -gt 0 -and $Arguments[0] -in @('install', 'upgrade', 'source')) {
+        Write-Log "DRY-RUN: wuerde ausfuehren: $display"
+        return [pscustomobject]@{ ExitCode = 0; Output = @(); Success = $true }
+    }
 
     try {
         $output = & $WingetPath @Arguments 2>&1
@@ -422,7 +564,7 @@ function Invoke-FirefoxMaintenance {
 
     try {
         Write-Log "Starte Firefox-Maintenance ohne Admin. Mode=$FirefoxUpdateMode PackageId=$FirefoxPackageId Locale=$FirefoxLocale"
-        Invoke-WingetCommand -WingetPath $winget -Arguments @('source', 'update') -AcceptedExitCodes @(0, 1) | Out-Null
+        Invoke-WingetCommand -WingetPath $winget -Arguments @('source', 'update') -AcceptedExitCodes @(0) | Out-Null
 
         $firefoxInstalled = (Test-FirefoxInstalledByWinget -WingetPath $winget) -or (Test-FirefoxInstalledByRegistry)
 
@@ -441,7 +583,7 @@ function Invoke-FirefoxMaintenance {
                 '--disable-interactivity'
             )
 
-            $result = Invoke-WingetCommand -WingetPath $winget -Arguments $upgradeArgs -AcceptedExitCodes @(0, 1)
+            $result = Invoke-WingetCommand -WingetPath $winget -Arguments $upgradeArgs -AcceptedExitCodes @(0)
             if ($result.Success) {
                 Write-Log 'Firefox-Upgrade-Pruefung abgeschlossen.'
             }
@@ -470,7 +612,7 @@ function Invoke-FirefoxMaintenance {
             '--disable-interactivity'
         )
 
-        $installResult = Invoke-WingetCommand -WingetPath $winget -Arguments $installArgs -AcceptedExitCodes @(0, 1)
+        $installResult = Invoke-WingetCommand -WingetPath $winget -Arguments $installArgs -AcceptedExitCodes @(0)
         if ($installResult.Success) {
             Write-Log 'Firefox-Benutzerinstallation abgeschlossen oder war bereits nicht noetig.'
         }
@@ -520,10 +662,7 @@ function Invoke-WindowsUpdateCheckOnly {
         $searcher = $session.CreateUpdateSearcher()
         $searcher.Online = $true
 
-        $criteriaList = @("IsInstalled=0 and IsHidden=0 and Type='Software' and BrowseOnly=0 and AutoSelectOnWebSites=1")
-        if ($IncludeDrivers) {
-            $criteriaList += "IsInstalled=0 and IsHidden=0 and Type='Driver' and BrowseOnly=0 and AutoSelectOnWebSites=1"
-        }
+        $criteriaList = @(Get-UpdateSearchCriteria -IncludeDrivers:$IncludeDrivers)
 
         $seen = @{}
         $count = 0
@@ -555,9 +694,23 @@ function Invoke-WindowsUpdateCheckOnly {
     }
 }
 
+function Get-UpdateSearchCriteria {
+    param([bool]$IncludeDrivers)
+
+    $criteria = @("IsInstalled=0 and IsHidden=0 and Type='Software' and BrowseOnly=0 and AutoSelectOnWebSites=1")
+    if ($IncludeDrivers) {
+        $criteria += "IsInstalled=0 and IsHidden=0 and Type='Driver' and BrowseOnly=0 and AutoSelectOnWebSites=1"
+    }
+    return $criteria
+}
+
 function Open-WindowsUpdatePage {
     try {
         Write-Log 'Oeffne Windows Update Einstellungen fuer manuelle Installation.'
+        if ($DryRun) {
+            Write-Log 'DRY-RUN: wuerde ms-settings:windowsupdate oeffnen.'
+            return
+        }
         Start-Process 'ms-settings:windowsupdate'
     }
     catch {
@@ -614,6 +767,16 @@ function Write-StartupStatusWindow {
     Set-Content -LiteralPath $StartupBat -Value $lines -Encoding ASCII
 }
 
+function New-UserAutoUpdaterArguments {
+    param([Parameter(Mandatory = $true)][string]$ScriptPath)
+
+    $driverLiteral = '$' + $IncludeAutomaticDrivers.ToString().ToLowerInvariant()
+    # Bypass gilt nur fuer den gestarteten powershell.exe-Prozess. Keine
+    # persistente ExecutionPolicy wird geaendert; Wochenlaeufe bleiben unattended.
+    return '-NoProfile -ExecutionPolicy Bypass -File "{0}" -Mode AutoRun -CleanupLevel {1} -FirefoxUpdateMode {2} -FirefoxPackageId "{3}" -FirefoxLocale "{4}" -IncludeAutomaticDrivers:{5} -OpenWindowsUpdateSettings:$false' -f `
+        $ScriptPath, $CleanupLevel, $FirefoxUpdateMode, $FirefoxPackageId, $FirefoxLocale, $driverLiteral
+}
+
 function Install-UserAutoUpdater {
     $scriptPath = Copy-SelfToLocalAppData
 
@@ -625,13 +788,17 @@ function Install-UserAutoUpdater {
     }
 
     $powershell = Join-Path $env:windir 'System32\WindowsPowerShell\v1.0\powershell.exe'
-    $taskCommand = '"{0}" -NoProfile -ExecutionPolicy Bypass -File "{1}" -Mode AutoRun -CleanupLevel {2} -FirefoxUpdateMode {3} -FirefoxPackageId "{4}" -FirefoxLocale "{5}" -IncludeAutomaticDrivers:{6} -OpenWindowsUpdateSettings:$false' -f `
-        $powershell, $scriptPath, $CleanupLevel, $FirefoxUpdateMode, $FirefoxPackageId, $FirefoxLocale, ('$' + $IncludeAutomaticDrivers.ToString().ToLowerInvariant())
+    $arguments = New-UserAutoUpdaterArguments -ScriptPath $scriptPath
+    $taskCommand = '"{0}" {1}' -f $powershell, $arguments
+
+    if ($DryRun) {
+        Write-Log "DRY-RUN: wuerde LIMITED-Benutzeraufgabe registrieren: $AutoDay $AutoTime; $taskCommand"
+        return
+    }
 
     $runnerLines = @(
         '@echo off',
-        ('"{0}" -NoProfile -ExecutionPolicy Bypass -File "{1}" -Mode AutoRun -CleanupLevel {2} -FirefoxUpdateMode {3} -FirefoxPackageId "{4}" -FirefoxLocale "{5}" -IncludeAutomaticDrivers:${6} -OpenWindowsUpdateSettings:$false' -f `
-            $powershell, $scriptPath, $CleanupLevel, $FirefoxUpdateMode, $FirefoxPackageId, $FirefoxLocale, $IncludeAutomaticDrivers.ToString().ToLowerInvariant())
+        $taskCommand
     )
     Set-Content -LiteralPath $RunnerBat -Value $runnerLines -Encoding ASCII
 
@@ -708,50 +875,56 @@ function Invoke-NoAdminWorkflow {
     }
 }
 
-$transcriptStarted = $false
-$mutex = $null
+if ($env:SURFACE_UPDATER_TEST_MODE -ne '1') {
+    $transcriptStarted = $false
+    $mutex = $null
 
-try {
-    Start-Transcript -Path $LogFile -Append -Force | Out-Null
-    $transcriptStarted = $true
+    try {
+        if (-not $DryRun) {
+            New-Item -Path $AppRoot -ItemType Directory -Force | Out-Null
+            New-Item -Path $LogDir -ItemType Directory -Force | Out-Null
+            Start-Transcript -Path $LogFile -Append -Force | Out-Null
+            $transcriptStarted = $true
+            Write-Log "Logfile: $LogFile"
+        }
 
-    Write-Log "Logfile: $LogFile"
-    Write-Log "Mode=$Mode CleanupLevel=$CleanupLevel FirefoxUpdateMode=$FirefoxUpdateMode IncludeAutomaticDrivers=$IncludeAutomaticDrivers OpenWindowsUpdateSettings=$OpenWindowsUpdateSettings"
+        Write-PreflightSummary
 
-    $createdNew = $false
-    $mutex = New-Object System.Threading.Mutex($false, $MutexName, [ref]$createdNew)
-    if (-not $mutex.WaitOne(0)) {
-        Write-Log 'Eine andere No-Admin-Instanz laeuft bereits. Beende diese Instanz.' 'WARN'
-        exit 0
+        $createdNew = $false
+        $mutex = New-Object System.Threading.Mutex($false, $MutexName, [ref]$createdNew)
+        if (-not $mutex.WaitOne(0)) {
+            Write-Log 'Eine andere No-Admin-Instanz laeuft bereits. Beende diese Instanz.' 'WARN'
+            exit 0
+        }
+
+        switch ($Mode) {
+            'InstallAutoUpdater' {
+                Install-UserAutoUpdater
+            }
+            'UpdateNow' {
+                Invoke-NoAdminWorkflow
+            }
+            'AutoRun' {
+                Invoke-NoAdminWorkflow
+            }
+            'OpenWindowsUpdateSettings' {
+                Open-WindowsUpdatePage
+            }
+        }
     }
-
-    switch ($Mode) {
-        'InstallAutoUpdater' {
-            Install-UserAutoUpdater
-        }
-        'UpdateNow' {
-            Invoke-NoAdminWorkflow
-        }
-        'AutoRun' {
-            Invoke-NoAdminWorkflow
-        }
-        'OpenWindowsUpdateSettings' {
-            Open-WindowsUpdatePage
-        }
+    catch {
+        Write-Log "FEHLER: $($_.Exception.Message)" 'ERROR'
+        Write-Log "Stack: $($_.ScriptStackTrace)" 'ERROR'
+        exit 1
     }
-}
-catch {
-    Write-Log "FEHLER: $($_.Exception.Message)" 'ERROR'
-    Write-Log "Stack: $($_.ScriptStackTrace)" 'ERROR'
-    exit 1
-}
-finally {
-    if ($mutex) {
-        try { $mutex.ReleaseMutex() | Out-Null } catch { }
-        try { $mutex.Dispose() } catch { }
-    }
+    finally {
+        if ($mutex) {
+            try { $mutex.ReleaseMutex() | Out-Null } catch { }
+            try { $mutex.Dispose() } catch { }
+        }
 
-    if ($transcriptStarted) {
-        try { Stop-Transcript | Out-Null } catch { }
+        if ($transcriptStarted) {
+            try { Stop-Transcript | Out-Null } catch { }
+        }
     }
 }

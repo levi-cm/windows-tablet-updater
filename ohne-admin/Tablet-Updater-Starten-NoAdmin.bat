@@ -23,6 +23,9 @@ if exist "%SystemRoot%\SysNative\WindowsPowerShell\v1.0\powershell.exe" (
     set "POWERSHELL_EXE=%SystemRoot%\SysNative\WindowsPowerShell\v1.0\powershell.exe"
 )
 
+REM ExecutionPolicy Bypass gilt nur je powershell.exe-Prozess. Keine persistente
+REM Richtlinie wird geaendert; lokale und geplante Laeufe bleiben unattended.
+
 if not exist "%PS_SCRIPT%" (
     echo.
     echo [FEHLER] PowerShell-Skript nicht gefunden:
@@ -49,17 +52,38 @@ echo     Laeuft nur, wenn dieser Benutzer angemeldet ist
 echo.
 echo 3 - Windows Update Einstellungen oeffnen
 echo.
-echo 4 - Beenden
+echo 4 - Probelauf ohne Aenderungen
 echo.
-set /p "CHOICE=Option eingeben [1-4]: "
+echo 5 - Beenden
+echo.
+set /p "CHOICE=Option eingeben [1-5]: "
 
 if "%CHOICE%"=="1" goto UPDATE_NOW
 if "%CHOICE%"=="2" goto START_AUTO
 if "%CHOICE%"=="3" goto OPEN_WU
-if "%CHOICE%"=="4" goto END
+if "%CHOICE%"=="4" goto DRY_RUN
+if "%CHOICE%"=="5" goto END
 
 echo.
 echo Ungueltige Eingabe.
+pause
+goto MENU
+
+:DRY_RUN
+cls
+echo Starte No-Admin-Probelauf ohne Aenderungen...
+echo.
+"%POWERSHELL_EXE%" -NoProfile -ExecutionPolicy Bypass -File "%PS_SCRIPT%" ^
+    -Mode UpdateNow ^
+    -CleanupLevel Deep ^
+    -FirefoxUpdateMode %FIREFOX_UPDATE_MODE% ^
+    -FirefoxPackageId "%FIREFOX_PACKAGE_ID%" ^
+    -FirefoxLocale "%FIREFOX_LOCALE%" ^
+    -IncludeAutomaticDrivers:$true ^
+    -OpenWindowsUpdateSettings:$true ^
+    -DryRun
+echo.
+echo Probelauf beendet. Es wurden keine Aenderungen ausgefuehrt.
 pause
 goto MENU
 

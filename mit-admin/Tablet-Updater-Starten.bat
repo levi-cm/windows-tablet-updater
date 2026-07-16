@@ -28,6 +28,9 @@ if exist "%SystemRoot%\SysNative\WindowsPowerShell\v1.0\powershell.exe" (
     set "POWERSHELL_EXE=%SystemRoot%\SysNative\WindowsPowerShell\v1.0\powershell.exe"
 )
 
+REM ExecutionPolicy Bypass gilt nur je powershell.exe-Prozess. Keine persistente
+REM Richtlinie wird geaendert; lokale und geplante Laeufe bleiben unattended.
+
 if /I "%~1"=="--warte-auf-dienstag" goto WAIT_FOR_TUESDAY
 
 net session >nul 2>&1
@@ -60,16 +63,42 @@ echo.
 echo 2 - Automatischen Dienstag-Updater starten
 echo     Richtet den Wochenlauf ein und laesst ein Hinweisfenster offen
 echo.
-echo 3 - Beenden
+echo 3 - Probelauf ohne Aenderungen
+echo     Zeigt Preflight, Bereinigung und Update-Auswahl nur an
 echo.
-set /p "CHOICE=Option eingeben [1-3]: "
+echo 4 - Beenden
+echo.
+set /p "CHOICE=Option eingeben [1-4]: "
 
 if "%CHOICE%"=="1" goto UPDATE_NOW
 if "%CHOICE%"=="2" goto START_AUTO
-if "%CHOICE%"=="3" goto END
+if "%CHOICE%"=="3" goto DRY_RUN
+if "%CHOICE%"=="4" goto END
 
 echo.
 echo Ungueltige Eingabe.
+pause
+goto MENU
+
+:DRY_RUN
+cls
+echo Starte Probelauf ohne Aenderungen...
+echo.
+"%POWERSHELL_EXE%" -NoProfile -ExecutionPolicy Bypass -File "%PS_SCRIPT%" ^
+    -Mode UpdateNow ^
+    -CleanupLevel Deep ^
+    -RegularOnly ^
+    -IncludeAutomaticDrivers:$true ^
+    -FirefoxUpdateMode %FIREFOX_UPDATE_MODE% ^
+    -FirefoxPackageId "%FIREFOX_PACKAGE_ID%" ^
+    -FirefoxLocale "%FIREFOX_LOCALE%" ^
+    -DisableHibernate:$true ^
+    -EnableCompactOS:$true ^
+    -RestartPolicy AlwaysAfterInstall ^
+    -MaxPasses 4 ^
+    -DryRun
+echo.
+echo Probelauf beendet. Es wurden keine Aenderungen ausgefuehrt.
 pause
 goto MENU
 

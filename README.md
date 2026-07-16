@@ -1,5 +1,12 @@
 # Windows Tablet Updater
 
+> **English summary:** Maintenance automation for storage-constrained Windows
+> tablets, with separate administrator and standard-user modes. Review the
+> preflight summary and use `-DryRun` first; admin mode can delete allowlisted
+> caches, install updates and drivers, change hibernation/CompactOS settings,
+> schedule SYSTEM tasks, and reboot. Downloads are accepted only through
+> trusted publisher signatures or authoritative package metadata.
+
 Dieses Repository enthaelt zwei Varianten eines Wartungs-Updaters fuer kleine
 Windows-Tablets, zum Beispiel Surface-Go-Geraete mit wenig Speicher.
 

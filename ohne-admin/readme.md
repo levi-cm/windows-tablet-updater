@@ -31,7 +31,7 @@ Dateien
 
 Bedienung
 ---------
-Nach dem Start zeigt das Fenster vier Eintraege:
+Nach dem Start zeigt das Fenster fuenf Eintraege:
 
 1 - Jetzt No-Admin-Wartung ausfuehren
     Fuehrt sofort eine Wartung aus:
@@ -51,8 +51,20 @@ Nach dem Start zeigt das Fenster vier Eintraege:
     Oeffnet die Windows Update Seite, damit Updates manuell gestartet werden
     koennen.
 
-4 - Beenden
+4 - Probelauf ohne Aenderungen
+    Zeigt Preflight, bereinigbare Pfade und angebotene Updates an, ohne Dateien,
+    Pakete, Aufgaben oder Windows-Einstellungen zu aendern.
+
+5 - Beenden
     Schliesst das Startmenue.
+
+Sicherheit
+----------
+Loeschziele werden gegen feste Benutzerpfad-Allowlisten geprueft. WinGet wird
+nur mit gueltiger Microsoft-Publishersignatur genutzt; Paketinstallationen aus
+der autoritativen WinGet-Quelle verwenden deren SHA256-Manifestpruefung.
+`-ExecutionPolicy Bypass` gilt nur fuer den jeweiligen PowerShell-Prozess und
+aendert keine persistente Richtlinie.
 
 Protokolle
 ----------

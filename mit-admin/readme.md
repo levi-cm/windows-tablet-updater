@@ -26,7 +26,7 @@ Dateien
 
 Bedienung
 ---------
-Nach dem Start zeigt das Fenster nur drei Eintraege:
+Nach dem Start zeigt das Fenster vier Eintraege:
 
 1 - Jetzt aktualisieren
     Fuehrt sofort eine Wartung aus:
@@ -43,8 +43,21 @@ Nach dem Start zeigt das Fenster nur drei Eintraege:
     - ein sichtbares Hinweisfenster bleibt offen
     - das Hinweisfenster startet nach einer Anmeldung automatisch wieder
 
-3 - Beenden
+3 - Probelauf ohne Aenderungen
+    Zeigt die Preflight-Zusammenfassung, geplante Bereinigung und angebotene
+    Updates an. Dateien, Pakete, Aufgaben, Energieoptionen und Neustarts bleiben
+    unveraendert.
+
+4 - Beenden
     Schliesst das Startmenue.
+
+Sicherheit
+----------
+Loeschziele werden vor jeder Bereinigung gegen feste Pfad-Allowlisten geprueft.
+WinGet und heruntergeladene Microsoft-Pakete werden vor Nutzung ueber gueltige
+Microsoft-Publishersignaturen bzw. WinGet-Manifest-Hashes verifiziert. Der
+Parameter `-ExecutionPolicy Bypass` gilt nur fuer den jeweiligen
+PowerShell-Prozess und aendert keine persistente Richtlinie.
 
 Wichtig zum offenen Fenster
 ---------------------------

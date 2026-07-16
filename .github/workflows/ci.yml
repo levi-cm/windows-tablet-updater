@@ -1,0 +1,56 @@
+---
+# yamllint disable rule:line-length
+name: Windows PowerShell CI
+
+'on':
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: windows-latest
+    timeout-minutes: 15
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
+
+      - name: Install pinned PowerShell test tools
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $gallery = Get-PSRepository -Name PSGallery
+          if ([Uri]$gallery.SourceLocation -notmatch '^https://www\.powershellgallery\.com/') {
+            throw "Unexpected PSGallery source: $($gallery.SourceLocation)"
+          }
+          Install-Module PSScriptAnalyzer -RequiredVersion 1.24.0 -Repository PSGallery -Scope CurrentUser -Force
+          Install-Module Pester -RequiredVersion 5.7.1 -Repository PSGallery -Scope CurrentUser -Force -SkipPublisherCheck:$false
+
+      - name: PSScriptAnalyzer
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $paths = @(
+            'mit-admin/Windows-Tablet-Updater.ps1',
+            'ohne-admin/Windows-Tablet-Updater-NoAdmin.ps1',
+            'tests'
+          )
+          $issues = @($paths | ForEach-Object { Invoke-ScriptAnalyzer -Path $_ -Recurse -Severity Error })
+          $issues | Format-Table -AutoSize | Out-String | Write-Host
+          if ($issues.Count -gt 0) { throw "PSScriptAnalyzer found $($issues.Count) error(s)." }
+
+      - name: Pester
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $config = New-PesterConfiguration
+          $config.Run.Path = 'tests'
+          $config.Run.Exit = $true
+          $config.Output.Verbosity = 'Detailed'
+          Invoke-Pester -Configuration $config
+
+      - name: Existing static checks
+        shell: bash
+        run: bash ohne-admin/tests/static_checks.sh
