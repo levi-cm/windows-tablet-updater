@@ -143,6 +143,6 @@ assert_not_regex "$PS1_FILE" '^[[:space:]]*Set-ExecutionPolicy([[:space:]]|$)'
 assert_contains "$CI_FILE" 'PSScriptAnalyzer'
 assert_contains "$CI_FILE" 'Pester'
 assert_contains "$CI_FILE" 'static_checks.sh'
-assert_contains "$CI_FILE" 'actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5'
+assert_contains "$CI_FILE" 'actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0'
 
 printf 'PASS: admin/no-admin structure checks\n'
