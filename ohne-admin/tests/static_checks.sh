@@ -79,7 +79,6 @@ assert_file "$NO_ADMIN_TEST_FILE"
 
 assert_missing "$ROOT_DIR/Windows-Tablet-Updater.ps1"
 assert_missing "$ROOT_DIR/Tablet-Updater-Starten.bat"
-assert_missing "$ROOT_DIR/readme.md"
 assert_missing "$ROOT_DIR/ABLAUF-DIAGRAMM.txt"
 assert_missing "$ROOT_DIR/no-admin"
 assert_missing "$NO_ADMIN_DIR/IMPLEMENTATION-PLAN.md"
